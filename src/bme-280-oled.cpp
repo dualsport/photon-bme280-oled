@@ -16,18 +16,22 @@
 #include "Adafruit_SSD1306.h"
 #include <math.h> // isnan()
 
+
+// Temp, pressure, humidity sensor
 void setup();
 void loop();
-#line 14 "c:/Users/Conrad/source/Particle/Photon/bme-280/bme-280-oled/src/bme-280-oled.ino"
-Adafruit_BME280 bme; // I2C
-
+int current(String unit);
+#line 16 "c:/Users/Conrad/source/Particle/Photon/bme-280/bme-280-oled/src/bme-280-oled.ino"
+Adafruit_BME280 bme;
+// 128x32 oled display
 Adafruit_SSD1306 display(-1);
-
-
 
 // I2C wiring 
 #define BME_MOSI D0 // = SDA 
 #define BME_SCK D1 // = SCL 
+
+ //onboard led
+ int led1 = D7;
 
 // Display update interval in seconds
 const int updatePeriod = 10;
@@ -35,23 +39,28 @@ unsigned long lastUpdate = 0;
 
 // Repeat time for Publish in seconds
 // Example 900 will repeat every 15 minutes at :00, :15, :30, :45
-const int period = 900;
+const int period = 1800;
 
 // time sync interval in seconds
 // simple interval, repeat every n seconds
-const int sync_interval = 3600;
+// 12 hours = 43200
+const int sync_interval = 43200;
 time_t next_sync;
 
 time_t current_time;
 time_t next_pub;
 
+// table of Magnus coefficients for dew point calculation
+// [minTempC, maxTempC, C1(mbar), C2(-), C3(C)]
+float mgn[2][5] = {{-50.9,0,6.1078,17.84362,254.425},{0,100,6.1078,17.08085,234.175}};
+
 char buf[64];
-int led1 = D7; //onboard led
 
 
 void setup() {
 	Serial.begin(9600);
     Particle.publish("status", "start", PRIVATE);
+    Particle.function("current_conditions", current);
 
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
     bme.begin(0x76);
@@ -76,6 +85,23 @@ void loop() {
     float humidity = bme.readHumidity(); // % 
     float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
 
+    // calculate dew point
+    int ms = 0;
+    float dewpoint = 999;
+    for (int i = 0; i < 2; i++) {
+      if (temp > mgn[i][1] && temp < mgn[i][2]) {
+        ms = i;
+      }
+    }
+    if (ms == 0) {
+      Particle.publish("error", "Temp out of range for dew point calculation.", PRIVATE);
+    }
+    else {
+      float ps = mgn[ms][2] * exp((mgn[ms][3] * temp)/(mgn[ms][4] + temp));
+      float pd = ps * (humidity / 100);
+      dewpoint = ( (log(pd / mgn[ms][2]) * mgn[ms][4]) / (log(pd / mgn[ms][2]) - mgn[ms][3]) );
+    }
+
 		display.clearDisplay();
 		
 		if (!isnan(temp) && !isnan(humidity) && !isnan(pressure)) {
@@ -90,7 +116,11 @@ void loop() {
       display.setCursor(0,24);
 			display.println(buf);
 
-			snprintf(buf, sizeof(buf), "%.1f InHg", pressure);
+			// snprintf(buf, sizeof(buf), "%.1f InHg", pressure);
+      // display.setCursor(0,48);
+			// display.println(buf);
+
+			snprintf(buf, sizeof(buf), "%.1f DewPt", dewpoint);
       display.setCursor(0,48);
 			display.println(buf);
 
@@ -123,3 +153,24 @@ void loop() {
       }
   }
 }
+
+int current(String unit) {
+    digitalWrite(led1, HIGH);
+    String result = "Invalid unit given. Allowed units are 'c' or 'f' for celsius or fahrenheit.";
+    if (unit == "c") {
+      float temp = bme.readTemperature(); // degrees C
+      float humidity = bme.readHumidity(); // % 
+      float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
+      String result = String::format("{\"Temp_C\": %4.2f, \"Press_InHg\": %4.2f, \"RelHum\": %4.2f}", temp, pressure, humidity);
+    }
+    else if (unit == "f") {
+      float temp = (bme.readTemperature() * 9 / 5) + 32; // degrees F
+      float humidity = bme.readHumidity(); // % 
+      float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
+      String result = String::format("{\"Temp_F\": %4.2f, \"Press_InHg\": %4.2f, \"RelHum\": %4.2f}", temp, pressure, humidity);
+    }
+    Particle.publish("current_conditions", result, PRIVATE);
+    digitalWrite(led1, LOW);
+    return 1;
+}
+        
