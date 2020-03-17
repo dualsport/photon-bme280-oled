@@ -152,6 +152,7 @@ float calcDewpoint(float temp, float humidity) {
   // calculate dewpoint from temp & relative humidity
   // temp in C, rel humidity as decimal, i.e. .715 for 71.5%
   // using Magnus formula
+  // source: https://www.azosensors.com/article.aspx?ArticleID=23
 
   // table of Magnus coefficients for dew point calculation
   // [minTempC, maxTempC, C1(mbar), C2(-), C3(C)]
