@@ -25,7 +25,7 @@ Adafruit_SSD1306 display(-1);
  int led1 = D7;
 
 // Display update interval in seconds
-const int updatePeriod = 5;
+const int updatePeriod = 60;
 unsigned long lastUpdate = 0;
 
 // Repeat time for Publish in seconds
@@ -101,7 +101,7 @@ void loop() {
 
       // Publish results
       if(current_time >= next_pub) {
-        String result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, pressure, humidity);
+        String result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, humidity, pressure);
         Particle.publish("readings", result, PRIVATE);
         next_pub = current_time - (current_time % period) + period;
       }
@@ -133,7 +133,7 @@ int current(String unit) {
       float humidity = bme.readHumidity(); // % 
       float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
       float dewpoint = calcDewpoint(temp, humidity); // dew point C
-      result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, pressure, humidity);
+      result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, humidity, pressure);
     }
     else if (unit == "f") {
       float temp = bme.readTemperature();
@@ -141,7 +141,7 @@ int current(String unit) {
       float humidity = bme.readHumidity(); // % 
       float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
       float dewpointF = (calcDewpoint(temp, humidity) * 9 / 5) + 32; // dew point F
-      result = String::format("{\"Temp_F\": %4.2f, \"Dewpoint_F\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", tempF, dewpointF, pressure, humidity);
+      result = String::format("{\"Temp_F\": %4.2f, \"Dewpoint_F\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", tempF, dewpointF, humidity, pressure);
     }
     Particle.publish("current_conditions", result, PRIVATE);
     digitalWrite(led1, LOW);
