@@ -87,13 +87,13 @@ void loop() {
 			display.setCursor(0,0);
 			display.println(buf);
 
-			snprintf(buf, sizeof(buf), "%.1f DwPtF", dewpoint * 9.0 / 5.0 + 32.0);
-      display.setCursor(0,24);
-			display.println(buf);
-
-			// snprintf(buf, sizeof(buf), "%.1f %% RH", humidity);
+			// snprintf(buf, sizeof(buf), "%.1f DwPtF", dewpoint * 9.0 / 5.0 + 32.0);
       // display.setCursor(0,24);
 			// display.println(buf);
+
+			snprintf(buf, sizeof(buf), "%.1f %% RH", humidity);
+      display.setCursor(0,24);
+			display.println(buf);
 
 			snprintf(buf, sizeof(buf), "%.1f InHg", pressure);
       display.setCursor(0,48);
@@ -172,7 +172,8 @@ float calcDewpoint(float temp, float humidity) {
     dewpoint = ( (-log(pd / mgn[ms][2]) * mgn[ms][4]) / (log(pd / mgn[ms][2]) - mgn[ms][3]) );
   }
   else {
-    Particle.publish("error", "Temp out of range for dew point calculation.", PRIVATE);
+    String result = String::format("Temp %4.2f out of range for dew point calculation.", temp);
+    Particle.publish("error", result, PRIVATE);
   }
   return dewpoint;
 }
