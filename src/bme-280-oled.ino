@@ -43,6 +43,12 @@ time_t next_pub;
 
 char buf[64];
 
+struct weather {
+  float temp_c;
+  float humidity;
+  float pressure;
+  float dewpt_c;
+};
 
 void setup() {
 	Serial.begin(9600);
@@ -50,7 +56,6 @@ void setup() {
     Particle.function("current_conditions", current);
 
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-    bme.begin(0x76);
 
     pinMode(led1, OUTPUT);
     digitalWrite(led1, LOW);
@@ -129,10 +134,11 @@ int current(String unit) {
     digitalWrite(led1, HIGH);
     String result = "Invalid unit given. Allowed units are 'c' or 'f' for celsius or fahrenheit.";
     if (unit == "c") {
-      float temp = bme.readTemperature(); // degrees C
-      float humidity = bme.readHumidity(); // % 
-      float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
-      float dewpoint = calcDewpoint(temp, humidity); // dew point C
+      struct weather w = get_weather();
+      float temp = w.temp_c;
+      float humidity = w.humidity;
+      float pressure = w.pressure;
+      float dewpoint = w.dewpt_c;
       result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, humidity, pressure);
     }
     else if (unit == "f") {
@@ -177,3 +183,13 @@ float calcDewpoint(float temp, float humidity) {
   }
   return dewpoint;
 }
+
+struct weather get_weather(void) {
+  bme.begin(0x76);
+  struct weather w;
+  w.temp_c = bme.readTemperature(); // degrees C
+  w.humidity = bme.readHumidity(); // % 
+  w.pressure = bme.readPressure() / 3386.39F; // inches-Hg
+  w.dewpt_c = calcDewpoint(w.temp_c, w.humidity); // dew point C
+  return w;
+} 
