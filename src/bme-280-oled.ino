@@ -59,7 +59,7 @@ void setup() {
     Particle.publish("status", "start", PRIVATE);
     Particle.function("current_conditions", current);
 
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+    display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // 128x32 display
     display.clearDisplay();
     display.display();
 
@@ -108,6 +108,8 @@ void loop() {
       display.setCursor(0,48);
 			display.println(buf);
 
+      display.display();
+
       // Publish results
       if(current_time >= next_pub) {
         String result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", w.temp_c, w.dewpt_c, w.humidity, w.pressure);
@@ -115,8 +117,19 @@ void loop() {
         next_pub = current_time - (current_time % period) + period;
       }
   	}
-    display.display();
-    digitalWrite(led1, LOW);
+    else {
+      display.clearDisplay();
+      display.setTextSize(2);
+      display.setTextColor(WHITE);
+      display.setCursor(0,0);
+      display.println("Error");
+      display.setCursor(0,24);
+      display.println("Reading");
+      display.setCursor(0,48);
+      display.println("BME280");
+      display.display();
+    }
+   digitalWrite(led1, LOW);
   }
 
   // sync time
