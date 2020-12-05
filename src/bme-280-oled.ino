@@ -21,8 +21,8 @@ Adafruit_SSD1306 display(-1);
 #define BME_MOSI D0 // = SDA 
 #define BME_SCK D1 // = SCL 
 
- //onboard led
- int led1 = D7;
+ int led1 = D7;  //onboard led
+ int bme_pwr = D4; //bme power
 
 // Display update interval in seconds
 const int updatePeriod = 60;
@@ -43,12 +43,16 @@ time_t next_pub;
 
 char buf[64];
 
-struct weather {
+struct weather{
   float temp_c;
+  float temp_f;
   float humidity;
   float pressure;
   float dewpt_c;
-};
+  float dewpt_f;
+} ;
+
+struct weather get_weather(void);
 
 void setup() {
 	Serial.begin(9600);
@@ -56,9 +60,13 @@ void setup() {
     Particle.function("current_conditions", current);
 
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+    display.clearDisplay();
+    display.display();
 
     pinMode(led1, OUTPUT);
     digitalWrite(led1, LOW);
+    pinMode(bme_pwr, OUTPUT);
+    digitalWrite(bme_pwr, LOW);
 
     current_time = Time.now();
     next_pub = current_time - (current_time % period) + period;
@@ -73,40 +81,36 @@ void loop() {
     digitalWrite(led1, HIGH);
 		lastUpdate = millis();
 		
-    float temp = bme.readTemperature(); // degrees C
-    float humidity = bme.readHumidity(); // % 
-    float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
+    struct weather w = get_weather();
 
 		display.clearDisplay();
 
 		// if we have good readings update screen & publish readings
-		if (!isnan(temp) && !isnan(humidity) && !isnan(pressure)) {
-      // calculate dew point
-      float dewpoint = calcDewpoint(temp, humidity);
+		if (!isnan(w.temp_c) && !isnan(w.humidity) && !isnan(w.pressure)) {
 
       // display results
 			display.setTextSize(2);
 			display.setTextColor(WHITE);
 			
-			snprintf(buf, sizeof(buf), "%.1f Deg F", temp * 9.0 / 5.0 + 32.0);
+			snprintf(buf, sizeof(buf), "%.1f Deg F", w.temp_f);
 			display.setCursor(0,0);
 			display.println(buf);
 
-			// snprintf(buf, sizeof(buf), "%.1f DwPtF", dewpoint * 9.0 / 5.0 + 32.0);
+			// snprintf(buf, sizeof(buf), "%.1f DwPtF", w.dewpt_f * 9.0 / 5.0 + 32.0);
       // display.setCursor(0,24);
 			// display.println(buf);
 
-			snprintf(buf, sizeof(buf), "%.1f %% RH", humidity);
+			snprintf(buf, sizeof(buf), "%.1f %% RH", w.humidity);
       display.setCursor(0,24);
 			display.println(buf);
 
-			snprintf(buf, sizeof(buf), "%.1f InHg", pressure);
+			snprintf(buf, sizeof(buf), "%.1f InHg", w.pressure);
       display.setCursor(0,48);
 			display.println(buf);
 
       // Publish results
       if(current_time >= next_pub) {
-        String result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, humidity, pressure);
+        String result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", w.temp_c, w.dewpt_c, w.humidity, w.pressure);
         Particle.publish("readings", result, PRIVATE);
         next_pub = current_time - (current_time % period) + period;
       }
@@ -132,22 +136,15 @@ void loop() {
 
 int current(String unit) {
     digitalWrite(led1, HIGH);
-    String result = "Invalid unit given. Allowed units are 'c' or 'f' for celsius or fahrenheit.";
-    if (unit == "c") {
+    String result = "Invalid unit given. Allowed units are 'C' or 'F' for celsius or fahrenheit.";
+    if (unit.toUpperCase() == "C" || unit.toUpperCase() == "F") {
       struct weather w = get_weather();
-      float temp = w.temp_c;
-      float humidity = w.humidity;
-      float pressure = w.pressure;
-      float dewpoint = w.dewpt_c;
-      result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", temp, dewpoint, humidity, pressure);
-    }
-    else if (unit == "f") {
-      float temp = bme.readTemperature();
-      float tempF = (temp * 9 / 5) + 32; // degrees F
-      float humidity = bme.readHumidity(); // % 
-      float pressure = (bme.readPressure() / 3386.39F); // inches-Hg
-      float dewpointF = (calcDewpoint(temp, humidity) * 9 / 5) + 32; // dew point F
-      result = String::format("{\"Temp_F\": %4.2f, \"Dewpoint_F\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", tempF, dewpointF, humidity, pressure);
+      if (unit.toUpperCase() == "C") {
+        result = String::format("{\"Temp_C\": %4.2f, \"Dewpoint_C\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", w.temp_c, w.dewpt_c, w.humidity, w.pressure);
+      }
+      else {
+        result = String::format("{\"Temp_F\": %4.2f, \"Dewpoint_F\": %4.2f, \"RelHum\": %4.2f, \"Press_InHg\": %4.2f}", w.temp_f, w.dewpt_f, w.humidity, w.pressure);
+      }
     }
     Particle.publish("current_conditions", result, PRIVATE);
     digitalWrite(led1, LOW);
@@ -185,11 +182,31 @@ float calcDewpoint(float temp, float humidity) {
 }
 
 struct weather get_weather(void) {
-  bme.begin(0x76);
+  bool bmeStarted = false;
+  digitalWrite(bme_pwr, HIGH);
+  delay(75);
+  do {
+    if (!bme.begin(0x76)) {
+      // cycle power if BME280 doesn't initialize
+      digitalWrite(bme_pwr, LOW);
+      delay(50);
+      digitalWrite(bme_pwr, HIGH);
+      delay(100);
+    }
+    else
+    {
+      bmeStarted = true;
+      delay(75); // allow to stabilize
+    }
+  } while (!bmeStarted);
+
   struct weather w;
   w.temp_c = bme.readTemperature(); // degrees C
+  w.temp_f = (w.temp_c * 9 / 5) + 32; // degrees F
   w.humidity = bme.readHumidity(); // % 
   w.pressure = bme.readPressure() / 3386.39F; // inches-Hg
   w.dewpt_c = calcDewpoint(w.temp_c, w.humidity); // dew point C
+  w.dewpt_f = (w.dewpt_c * 9 / 5) + 32; // dew point F
+  digitalWrite(bme_pwr, LOW);
   return w;
 } 
