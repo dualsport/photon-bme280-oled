@@ -11,6 +11,7 @@
 #include "Adafruit_SSD1306.h"
 #include <math.h> // isnan()
 
+char program_name[] = "particle-bme-280-oled";
 
 // Temp, pressure, humidity sensor
 Adafruit_BME280 bme;
@@ -57,7 +58,9 @@ struct weather get_weather(void);
 void setup() {
 	Serial.begin(9600);
     Particle.publish("status", "start", PRIVATE);
+    Particle.publish("program_name", program_name, PRIVATE);
     Particle.function("current_conditions", current);
+    Particle.function("program_name", publish_name);
 
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // 128x32 display
     display.clearDisplay();
@@ -223,3 +226,10 @@ struct weather get_weather(void) {
   digitalWrite(bme_pwr, LOW);
   return w;
 } 
+
+int publish_name(String args) {
+    digitalWrite(led1, HIGH);
+    Particle.publish("program_name", program_name, PRIVATE);
+    digitalWrite(led1, LOW);
+    return 1;
+}
